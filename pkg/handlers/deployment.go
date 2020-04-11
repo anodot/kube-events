@@ -1,39 +1,77 @@
 package handlers
 
 import (
+	"fmt"
+	"github.com/anodot/anodot-common/pkg/common"
+	"github.com/anodot/anodot-common/pkg/events"
 	apps_v1beta1 "k8s.io/api/apps/v1beta1"
-	"kube-events/pkg/controller"
-	"reflect"
 )
 
 type DeploymentHandler struct {
+	UserEventConfiguration
 }
 
-// 1. replica number changed
-// 2. Env variable changed
-// 3. Image changed ?
+func (d *DeploymentHandler) SupportedEvent() string {
+	return "deployment"
+}
 
-func (d *DeploymentHandler) DoHandle(event controller.Event) {
-	panic("implement me")
-	newDep := event.New.(*apps_v1beta1.Deployment)
-	oldDeployment := event.Old.(*apps_v1beta1.Deployment)
+func (d *DeploymentHandler) EventData(event Event) ([]events.Event, error) {
+	allEvents := make([]events.Event, 0)
 
-	if newDep.Spec.Replicas != oldDeployment.Spec.Replicas {
-		//create event replicas changed
-	}
+	switch event.EventType {
+	case "update":
+		if event.New == nil || event.Old == nil {
+			//TODO better error message
+			return nil, fmt.Errorf("unable to retrieve deployment information")
+		}
 
-	for _, c := range newDep.Spec.Template.Spec.Containers {
-		for _, oldC := range oldDeployment.Spec.Template.Spec.Containers {
-			if c.Name == oldC.Name {
-				if c.Image != oldC.Image {
-					//image changed event
-				}
+		newDep := event.New.(*apps_v1beta1.Deployment)
+		oldDeployment := event.Old.(*apps_v1beta1.Deployment)
+
+		deploymentName := newDep.Name
+
+		if *newDep.Spec.Replicas != *oldDeployment.Spec.Replicas {
+			res := events.Event{
+				Title:       fmt.Sprintf("'%s' deployment replica number changed", deploymentName),
+				Description: fmt.Sprintf("%s replicas changed from '%d' to '%d'", deploymentName, *oldDeployment.Spec.Replicas, *newDep.Spec.Replicas),
+				Category:    d.Category,
+				Source:      d.Source,
+				Properties: []events.EventProperties{
+					{Key: "deployment", Value: deploymentName},
+					{Key: "namespace", Value: newDep.Namespace}},
+				StartDate: common.AnodotTimestamp{Time: event.EventTime},
 			}
+			allEvents = append(allEvents, res)
+		}
 
-			if !reflect.DeepEqual(c.Env, oldC.Env) {
-
+		//image changed
+		for _, newC := range newDep.Spec.Template.Spec.Containers {
+			for _, oldC := range oldDeployment.Spec.Template.Spec.Containers {
+				if newC.Name == oldC.Name {
+					if newC.Image != oldC.Image {
+						res := events.Event{
+							Title:       fmt.Sprintf("'%s' deployment image changed", deploymentName),
+							Description: fmt.Sprintf("%s image changed from '%s' to '%s'", deploymentName, oldC.Image, newC.Image),
+							Category:    d.Category,
+							Source:      d.Source,
+							Properties: []events.EventProperties{
+								{Key: "deployment", Value: deploymentName},
+								{Key: "namespace", Value: newDep.Namespace},
+								{Key: "container", Value: newC.Name}},
+							StartDate: common.AnodotTimestamp{Time: event.EventTime},
+						}
+						allEvents = append(allEvents, res)
+					}
+				}
+				//TODO env check ?
+				/*if !reflect.DeepEqual(c.Env, oldC.Env) {
+				}*/
 			}
 		}
+
+	case "delete":
+
 	}
 
+	return allEvents, nil
 }

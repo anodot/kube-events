@@ -1,0 +1,19 @@
+deployment:
+  enabled: true
+  namespace: ""
+  eventConfig:
+    category: "test-category"
+    source: "test-source"
+  exclude:
+    namespace: []
+    labels: {}
+    annotations: {}
+configmap:
+  enabled: true
+  namespace: ""
+  exclude:
+    namespace: []
+    labels:
+      OWNER: "TILLER"
+    annotations:
+      "control-plane.alpha.kubernetes.io/leader": ".*"

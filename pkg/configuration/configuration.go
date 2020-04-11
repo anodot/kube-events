@@ -1,23 +1,98 @@
 package configuration
 
+import (
+	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/api/meta"
+	log "k8s.io/klog/v2"
+	"regexp"
+)
+
 type Configuration struct {
-	ExcludeNamespace string
-	Resource         Resource
-	//TODO
-	Namespace string
+	Deployment            Resource
+	StatefulSet           Resource
+	ReplicationController Resource
+	ReplicaSet            Resource
+	DaemonSet             Resource
+	Services              Resource
+	Pod                   Resource
+	Job                   Resource
+	PersistentVolume      Resource
+	Namespace             Resource
+	Secret                Resource
+	ConfigMap             Resource
+	Ingress               Resource
+}
+
+func NewFromYaml(d []byte) (*Configuration, error) {
+	configuration := &Configuration{}
+	err := yaml.Unmarshal(d, configuration)
+	if err != nil {
+		return nil, err
+	}
+	return configuration, nil
 }
 
 type Resource struct {
-	Deployment            bool `json:"deployment"`
-	ReplicationController bool `json:"rc"`
-	ReplicaSet            bool `json:"rs"`
-	DaemonSet             bool `json:"ds"`
-	Services              bool `json:"svc"`
-	Pod                   bool `json:"po"`
-	Job                   bool `json:"job"`
-	PersistentVolume      bool `json:"pv"`
-	Namespace             bool `json:"ns"`
-	Secret                bool `json:"secret"`
-	ConfigMap             bool `json:"configmap"`
-	Ingress               bool `json:"ing"`
+	Enabled       bool
+	Namespace     string
+	FilterOptions ObjectFiler `yaml:"exclude,omitempty"`
+}
+
+//TOOO implement this
+type EventConfig struct {
+	Category string
+	Source   string
+}
+
+type ObjectFiler struct {
+	Namespace   []string
+	Labels      map[string]string
+	Annotations map[string]string
+}
+
+func (o *ObjectFiler) IsExcluded(obj interface{}) bool {
+	object, err := meta.Accessor(obj)
+	if err != nil {
+		log.Error(err.Error() + ". IsExcluded is set to 'true' ")
+		return true
+	}
+
+	matchNamespace := o.MatchNamespace(object.GetNamespace())
+	matchAnnotations := o.MatchAnnotations(object.GetAnnotations())
+	matchLabels := o.MatchLabels(object.GetLabels())
+
+	//TODO better logs
+	if matchAnnotations || matchNamespace || matchLabels {
+		log.V(5).Infof("'%s' excluded by annotations=%t, by labels=%t, by namespace=%t", object.GetName(), matchAnnotations, matchLabels, matchNamespace)
+		return true
+	}
+
+	return false
+}
+
+func (o *ObjectFiler) MatchLabels(m map[string]string) bool {
+	for kk, vv := range m {
+		if v, ok := o.Labels[kk]; ok && regexp.MustCompile(v).MatchString(vv) {
+			return true
+		}
+	}
+	return false
+}
+
+func (o *ObjectFiler) MatchAnnotations(m map[string]string) bool {
+	for kk, vv := range m {
+		if v, ok := o.Annotations[kk]; ok && regexp.MustCompile(v).MatchString(vv) {
+			return true
+		}
+	}
+	return false
+}
+
+func (o *ObjectFiler) MatchNamespace(namespace string) bool {
+	for _, v := range o.Namespace {
+		if v == namespace {
+			return true
+		}
+	}
+	return false
 }

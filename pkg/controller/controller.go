@@ -2,14 +2,20 @@ package controller
 
 import (
 	"fmt"
-	"kube-events/pkg/configuration"
-	"kube-events/pkg/utils"
+	"github.com/anodot/kube-events/pkg/configuration"
+	"github.com/anodot/kube-events/pkg/handlers"
+	"github.com/anodot/kube-events/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	k8sruntime "k8s.io/apimachinery/pkg/util/runtime"
+	log "k8s.io/klog/v2"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	apps_v1beta1 "k8s.io/api/apps/v1beta1"
 	batch_v1 "k8s.io/api/batch/v1"
 	api_v1 "k8s.io/api/core/v1"
@@ -25,31 +31,28 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
+var (
+	k8sErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "anodot_kube_event_kubernetes_error_count",
+		Help: "Total number of error while processing events",
+	})
+)
+
 var serverStartTime time.Time
 
 type EventHandler interface {
 	DoHandle()
 }
 
-type Event struct {
-	key          string
-	eventType    string
-	namespace    string
-	resourceType string
-
-	New, Old interface{}
-}
-
 type Controller struct {
-	logger    *logrus.Entry
-	clientset kubernetes.Interface
-	queue     workqueue.RateLimitingInterface
-	informer  cache.SharedIndexInformer
-	//eventHandler handlers.Handler
+	clientset    kubernetes.Interface
+	queue        workqueue.RateLimitingInterface
+	informer     cache.SharedIndexInformer
+	eventHandler *handlers.AnodotEventhandler
 }
 
 // Start prepares watchers and run their controllers, then waits for process termination signals
-func Start(conf configuration.Configuration, eventHandler interface{}) {
+func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventhandler) {
 	var kubeClient kubernetes.Interface
 	_, err := rest.InClusterConfig()
 	if err != nil {
@@ -58,15 +61,29 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 		kubeClient = utils.GetClient()
 	}
 
-	logrus.Info("here")
-	if conf.Resource.Pod {
+	go func() {
+		serveMux := http.NewServeMux()
+		serveMux.Handle("/metrics", promhttp.Handler())
+		serveMux.HandleFunc("/health", func(writer http.ResponseWriter, request *http.Request) {
+			_, err := fmt.Fprintf(writer, `{"time": "%d"}`, time.Now().Unix())
+			if err != nil {
+				log.Error(err.Error())
+			}
+		})
+		err := http.ListenAndServe(":8080", serveMux)
+		if err != nil {
+			log.Error("failed to initialize metrics endpoint: ", err.Error())
+		}
+	}()
+
+	if conf.Pod.Enabled {
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().Pods(conf.Namespace).List(options)
+					return kubeClient.CoreV1().Pods(conf.Pod.Namespace).List(options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().Pods(conf.Namespace).Watch(options)
+					return kubeClient.CoreV1().Pods(conf.Pod.Namespace).Watch(options)
 				},
 			},
 			&api_v1.Pod{},
@@ -74,21 +91,21 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "pod")
+		c := newResourceController(kubeClient, eventHandler, informer, "pod", conf.Pod.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
 		go c.Run(stopCh)
 	}
 
-	if conf.Resource.DaemonSet {
+	if conf.DaemonSet.Enabled {
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.ExtensionsV1beta1().DaemonSets(conf.Namespace).List(options)
+					return kubeClient.ExtensionsV1beta1().DaemonSets(conf.DaemonSet.Namespace).List(options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.ExtensionsV1beta1().DaemonSets(conf.Namespace).Watch(options)
+					return kubeClient.ExtensionsV1beta1().DaemonSets(conf.DaemonSet.Namespace).Watch(options)
 				},
 			},
 			&ext_v1beta1.DaemonSet{},
@@ -96,21 +113,21 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "daemonset")
+		c := newResourceController(kubeClient, eventHandler, informer, "daemonset", conf.DaemonSet.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
 		go c.Run(stopCh)
 	}
 
-	if conf.Resource.ReplicaSet {
+	if conf.ReplicaSet.Enabled {
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.ExtensionsV1beta1().ReplicaSets(conf.Namespace).List(options)
+					return kubeClient.ExtensionsV1beta1().ReplicaSets(conf.ReplicaSet.Namespace).List(options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.ExtensionsV1beta1().ReplicaSets(conf.Namespace).Watch(options)
+					return kubeClient.ExtensionsV1beta1().ReplicaSets(conf.ReplicaSet.Namespace).Watch(options)
 				},
 			},
 			&ext_v1beta1.ReplicaSet{},
@@ -118,21 +135,21 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "replicaset")
+		c := newResourceController(kubeClient, eventHandler, informer, "replicaset", conf.ReplicaSet.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
 		go c.Run(stopCh)
 	}
 
-	if conf.Resource.Services {
+	if conf.Services.Enabled {
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().Services(conf.Namespace).List(options)
+					return kubeClient.CoreV1().Services(conf.Services.Namespace).List(options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().Services(conf.Namespace).Watch(options)
+					return kubeClient.CoreV1().Services(conf.Services.Namespace).Watch(options)
 				},
 			},
 			&api_v1.Service{},
@@ -140,21 +157,21 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "service")
+		c := newResourceController(kubeClient, eventHandler, informer, "service", conf.Services.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
 		go c.Run(stopCh)
 	}
 
-	if conf.Resource.Deployment {
+	if conf.Deployment.Enabled {
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.AppsV1beta1().Deployments(conf.Namespace).List(options)
+					return kubeClient.AppsV1beta1().Deployments(conf.Deployment.Namespace).List(options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.AppsV1beta1().Deployments(conf.Namespace).Watch(options)
+					return kubeClient.AppsV1beta1().Deployments(conf.Deployment.Namespace).Watch(options)
 				},
 			},
 			&apps_v1beta1.Deployment{},
@@ -162,14 +179,14 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "deployment")
+		c := newResourceController(kubeClient, eventHandler, informer, "deployment", conf.Deployment.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
 		go c.Run(stopCh)
 	}
 
-	if conf.Resource.Namespace {
+	if conf.Namespace.Enabled {
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
@@ -184,21 +201,21 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "namespace")
+		c := newResourceController(kubeClient, eventHandler, informer, "namespace", conf.Namespace.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
 		go c.Run(stopCh)
 	}
 
-	if conf.Resource.ReplicationController {
+	if conf.ReplicationController.Enabled {
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().ReplicationControllers(conf.Namespace).List(options)
+					return kubeClient.CoreV1().ReplicationControllers(conf.ReplicationController.Namespace).List(options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().ReplicationControllers(conf.Namespace).Watch(options)
+					return kubeClient.CoreV1().ReplicationControllers(conf.ReplicationController.Namespace).Watch(options)
 				},
 			},
 			&api_v1.ReplicationController{},
@@ -206,21 +223,21 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "replication controller")
+		c := newResourceController(kubeClient, eventHandler, informer, "replication controller", conf.ReplicationController.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
 		go c.Run(stopCh)
 	}
 
-	if conf.Resource.Job {
+	if conf.Job.Enabled {
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.BatchV1().Jobs(conf.Namespace).List(options)
+					return kubeClient.BatchV1().Jobs(conf.Job.Namespace).List(options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.BatchV1().Jobs(conf.Namespace).Watch(options)
+					return kubeClient.BatchV1().Jobs(conf.Job.Namespace).Watch(options)
 				},
 			},
 			&batch_v1.Job{},
@@ -228,14 +245,14 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "job")
+		c := newResourceController(kubeClient, eventHandler, informer, "job", conf.Job.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
 		go c.Run(stopCh)
 	}
 
-	if conf.Resource.PersistentVolume {
+	if conf.PersistentVolume.Enabled {
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
@@ -250,21 +267,21 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "persistent volume")
+		c := newResourceController(kubeClient, eventHandler, informer, "persistent volume", conf.PersistentVolume.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
 		go c.Run(stopCh)
 	}
 
-	if conf.Resource.Secret {
+	if conf.Secret.Enabled {
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().Secrets(conf.Namespace).List(options)
+					return kubeClient.CoreV1().Secrets(conf.Secret.Namespace).List(options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().Secrets(conf.Namespace).Watch(options)
+					return kubeClient.CoreV1().Secrets(conf.Secret.Namespace).Watch(options)
 				},
 			},
 			&api_v1.Secret{},
@@ -272,21 +289,21 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "secret")
+		c := newResourceController(kubeClient, eventHandler, informer, "secret", conf.Secret.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
 		go c.Run(stopCh)
 	}
 
-	if conf.Resource.ConfigMap {
+	if conf.ConfigMap.Enabled {
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().ConfigMaps(conf.Namespace).List(options)
+					return kubeClient.CoreV1().ConfigMaps(conf.ConfigMap.Namespace).List(options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().ConfigMaps(conf.Namespace).Watch(options)
+					return kubeClient.CoreV1().ConfigMaps(conf.ConfigMap.Namespace).Watch(options)
 				},
 			},
 			&api_v1.ConfigMap{},
@@ -294,21 +311,21 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "configmap")
+		c := newResourceController(kubeClient, eventHandler, informer, "configmap", conf.ConfigMap.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
 		go c.Run(stopCh)
 	}
 
-	if conf.Resource.Ingress {
+	if conf.Ingress.Enabled {
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.ExtensionsV1beta1().Ingresses(conf.Namespace).List(options)
+					return kubeClient.ExtensionsV1beta1().Ingresses(conf.Ingress.Namespace).List(options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.ExtensionsV1beta1().Ingresses(conf.Namespace).Watch(options)
+					return kubeClient.ExtensionsV1beta1().Ingresses(conf.Ingress.Namespace).Watch(options)
 				},
 			},
 			&ext_v1beta1.Ingress{},
@@ -316,7 +333,29 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "ingress")
+		c := newResourceController(kubeClient, eventHandler, informer, "ingress", conf.Ingress.FilterOptions)
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+
+		go c.Run(stopCh)
+	}
+
+	if conf.StatefulSet.Enabled {
+		informer := cache.NewSharedIndexInformer(
+			&cache.ListWatch{
+				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
+					return kubeClient.AppsV1beta1().StatefulSets(conf.StatefulSet.Namespace).List(options)
+				},
+				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
+					return kubeClient.AppsV1beta1().StatefulSets(conf.StatefulSet.Namespace).Watch(options)
+				},
+			},
+			&apps_v1beta1.StatefulSet{},
+			0, //Skip resync
+			cache.Indexers{},
+		)
+
+		c := newResourceController(kubeClient, eventHandler, informer, "ingress", conf.Ingress.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
@@ -329,53 +368,58 @@ func Start(conf configuration.Configuration, eventHandler interface{}) {
 	<-sigterm
 }
 
-func newResourceController(client kubernetes.Interface, eventHandler interface{}, informer cache.SharedIndexInformer, resourceType string) *Controller {
+func newResourceController(client kubernetes.Interface, eventHandler *handlers.AnodotEventhandler, informer cache.SharedIndexInformer, resourceType string, filter configuration.ObjectFiler) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
-	var newEvent Event
+	var newEvent handlers.Event
 	var err error
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "create"
-			newEvent.resourceType = resourceType
-			logrus.WithField("pkg", "kubewatch-"+resourceType).Infof("Processing add to %v: %s", resourceType, newEvent.key)
+			newEvent.Key, err = cache.MetaNamespaceKeyFunc(obj)
+			newEvent.EventType = "create"
+			newEvent.ResourceType = resourceType
+			newEvent.EventTime = time.Now()
+			log.V(4).Infof("Processing add to %v: %s", resourceType, newEvent.Key)
 			if err == nil {
-				queue.Add(newEvent)
+				if !filter.IsExcluded(obj) {
+					queue.Add(newEvent)
+				}
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-			newEvent.key, err = cache.MetaNamespaceKeyFunc(old)
-			newEvent.eventType = "update"
-			newEvent.resourceType = resourceType
-			logrus.WithField("pkg", "kubewatch-"+resourceType).Infof("Processing update to %v: %s", resourceType, newEvent.key)
+			newEvent.Key, err = cache.MetaNamespaceKeyFunc(old)
+			newEvent.EventType = "update"
+			newEvent.ResourceType = resourceType
+			newEvent.EventTime = time.Now()
 
-			if resourceType == "deployment" {
-				oldDep := old.(*apps_v1beta1.Deployment)
-				newDep := new.(*apps_v1beta1.Deployment)
-				logrus.Println(fmt.Sprintf("old instances =%d new instances =%d", oldDep.Status.Replicas, newDep.Status.Replicas))
-			}
+			newEvent.Old = old
+			newEvent.New = new
+			log.V(4).Infof("Processing update to %v: %s", resourceType, newEvent.Key)
 
 			if err == nil {
-				queue.Add(newEvent)
+				if !filter.IsExcluded(new) {
+					queue.Add(newEvent)
+				}
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			newEvent.key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			newEvent.eventType = "delete"
-			newEvent.resourceType = resourceType
-			newEvent.namespace = utils.GetObjectMetaData(obj).Namespace
-			logrus.WithField("pkg", "kubewatch-"+resourceType).Infof("Processing delete to %v: %s", resourceType, newEvent.key)
+			newEvent.Key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			newEvent.EventType = "delete"
+			newEvent.ResourceType = resourceType
+			newEvent.EventTime = time.Now()
+			log.V(4).Infof("Processing delete to %v: %s", resourceType, newEvent.Key)
 			if err == nil {
-				queue.Add(newEvent)
+				if !filter.IsExcluded(obj) {
+					queue.Add(newEvent)
+				}
 			}
 		},
 	})
 
 	return &Controller{
-		logger:    logrus.WithField("pkg", "kubewatch-"+resourceType),
-		clientset: client,
-		informer:  informer,
-		queue:     queue,
+		clientset:    client,
+		informer:     informer,
+		queue:        queue,
+		eventHandler: eventHandler,
 	}
 }
 
@@ -384,8 +428,12 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
-	c.logger.Info("Starting kubewatch controller")
+	log.V(3).Info("Starting kubewatch controller")
 	serverStartTime = time.Now().Local()
+
+	k8sruntime.ErrorHandlers = append(k8sruntime.ErrorHandlers, func(err error) {
+		k8sErrors.Inc()
+	})
 
 	go c.informer.Run(stopCh)
 
@@ -394,7 +442,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	c.logger.Info("Kubewatch controller synced and ready")
+	log.V(3).Info("Kubewatch controller synced and ready")
 
 	wait.Until(c.runWorker, time.Second, stopCh)
 }
@@ -422,17 +470,17 @@ func (c *Controller) processNextItem() bool {
 		return false
 	}
 	defer c.queue.Done(newEvent)
-	err := c.processItem(newEvent.(Event))
+	err := c.processItem(newEvent.(handlers.Event))
 	if err == nil {
 		// No error, reset the ratelimit counters
 		c.queue.Forget(newEvent)
 		//TODO max retries
 	} else if c.queue.NumRequeues(newEvent) < 5 {
-		c.logger.Errorf("Error processing %s (will retry): %v", newEvent.(Event).key, err)
+		log.Errorf("Error processing %s (will retry): %v", newEvent.(handlers.Event).Key, err)
 		c.queue.AddRateLimited(newEvent)
 	} else {
 		// err != nil and too many retries
-		c.logger.Errorf("Error processing %s (giving up): %v", newEvent.(Event).key, err)
+		log.Errorf("Error processing %s (giving up): %v", newEvent.(handlers.Event).Key, err)
 		c.queue.Forget(newEvent)
 		utilruntime.HandleError(err)
 	}
@@ -440,50 +488,27 @@ func (c *Controller) processNextItem() bool {
 	return true
 }
 
-/* TODOs
-- Enhance event creation using client-side cacheing machanisms - pending
-- Enhance the processItem to classify events - done
-- Send alerts correspoding to events - done
-*/
-
-func (c *Controller) processItem(newEvent Event) error {
-	obj, _, err := c.informer.GetIndexer().GetByKey(newEvent.key)
+func (c *Controller) processItem(newEvent handlers.Event) error {
+	obj, _, err := c.informer.GetIndexer().GetByKey(newEvent.Key)
 	if err != nil {
-		return fmt.Errorf("Error fetching object with key %s from store: %v", newEvent.key, err)
+		return fmt.Errorf("error fetching object with key %s from store: %v", newEvent.Key, err)
 	}
-	// get object's metedata
+
 	objectMeta := utils.GetObjectMetaData(obj)
 
-	// process events based on its type
-	switch newEvent.eventType {
+	switch newEvent.EventType {
 	case "create":
 		// compare CreationTimestamp and serverStartTime and alert only on latest events
 		// Could be Replaced by using Delta or DeltaFIFO
 		if objectMeta.CreationTimestamp.Sub(serverStartTime).Seconds() > 0 {
-			//c.eventHandler.ObjectCreated(obj)
+			c.eventHandler.Handle(newEvent)
 			return nil
 		}
-
-		//logrus.Println(newEvent)
 	case "update":
-		/* TODOs
-		- enahace update event processing in such a way that, it send alerts about what got changed.
-		*/
-		/*kbEvent := event.Event{
-			Kind: newEvent.resourceType,
-			Name: newEvent.key,
-		}
-		c.eventHandler.ObjectUpdated(obj, kbEvent)*/
-		//logrus.Println(newEvent)
+		c.eventHandler.Handle(newEvent)
 		return nil
 	case "delete":
-		/*		kbEvent := event.Event{
-					Kind:      newEvent.resourceType,
-					Name:      newEvent.key,
-					Namespace: newEvent.namespace,
-				}
-				c.eventHandler.ObjectDeleted(kbEvent)*/
-		//logrus.Println(newEvent)
+		c.eventHandler.Handle(newEvent)
 		return nil
 	}
 	return nil
