@@ -9,7 +9,6 @@ import (
 	"github.com/anodot/kube-events/pkg/version"
 	"io/ioutil"
 	log "k8s.io/klog/v2"
-	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -31,32 +30,6 @@ func main() {
 
 	log.V(4).Infof("Anodot Server URL: '%s'", anodotURL)
 	log.V(4).Infof("Anodot api token: '%s'", anodotApiToken)
-
-	eventCategory := os.Getenv("ANODOT_EVENT_CATEGORY")
-	eventSource := os.Getenv("ANODOT_EVENT_SOURCE")
-
-	eventConfiguration := handlers.UserEventConfiguration{
-		Source:     eventSource,
-		Category:   eventCategory,
-		Properties: make(map[string]string),
-	}
-
-	for _, s := range os.Environ() {
-		split := strings.Split(s, "=")
-		k := split[0]
-		v := split[1]
-
-		if strings.HasPrefix(k, "ANODOT_EVENTS_PROPS_") {
-			eventConfiguration.Properties[strings.ToLower(strings.TrimPrefix(k, "ANODOT_EVENTS_PROPS_"))] = v
-		}
-	}
-
-	u, _ := url.Parse(anodotURL)
-	anodotEventHandler, err := handlers.NewAnodotEventHandler(*u, anodotApiToken, eventConfiguration)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	configLocation := defaultIfBlank(os.Getenv("ANODOT_EVENT_CONFIG_LOCATION"), "/mnt/config.yaml")
 	yamlFile, err := ioutil.ReadFile(configLocation)
 	if err != nil {
@@ -68,7 +41,13 @@ func main() {
 		log.Fatalf(err.Error())
 	}
 
-	log.V(5).Infof("configuration: %+v\n", string(yamlFile))
+	log.V(5).Infof("configuration: %+v\n", *config)
+
+	anodotEventHandler, err := handlers.NewAnodotEventHandler(anodotURL, anodotApiToken, *config)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	controller.Start(*config, anodotEventHandler)
 }
 

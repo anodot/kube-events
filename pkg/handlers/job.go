@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"github.com/anodot/anodot-common/pkg/common"
 	"github.com/anodot/anodot-common/pkg/events"
+	"github.com/anodot/kube-events/pkg/configuration"
 	v1 "k8s.io/api/batch/v1"
-	log "k8s.io/klog/v2"
-	"strings"
 )
 
 type JobHandler struct {
-	UserEventConfiguration
+	configuration.EventConfig
 }
 
 func (d *JobHandler) SupportedEvent() string {
@@ -19,11 +18,6 @@ func (d *JobHandler) SupportedEvent() string {
 
 func (d *JobHandler) EventData(event Event) ([]events.Event, error) {
 	allEvents := make([]events.Event, 0)
-	newJob := event.New.(*v1.Job)
-	if strings.HasPrefix(newJob.Name, "monitor-offline") {
-		log.V(5).Infof("skipping job %q", newJob.Name)
-		return allEvents, nil
-	}
 
 	switch event.EventType {
 	case "create":

@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"github.com/anodot/anodot-common/pkg/common"
 	"github.com/anodot/anodot-common/pkg/events"
+	"github.com/anodot/kube-events/pkg/configuration"
 	api_v1 "k8s.io/api/core/v1"
 )
 
 type ConfigmapHandler struct {
-	UserEventConfiguration
+	configuration.EventConfig
 }
 
 func (c *ConfigmapHandler) EventData(event Event) ([]events.Event, error) {

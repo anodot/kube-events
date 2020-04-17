@@ -5,6 +5,7 @@ import (
 	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"os"
 	"testing"
 )
 
@@ -41,12 +42,15 @@ func TestMarshl(t *testing.T) {
 }
 
 func TestUnmarshall(t *testing.T) {
+
+	os.Setenv("ANODOT_EVENT_SOURCE", "vova")
+	os.Setenv("ANODOT_EVENT_CATEGORY", "vova-cat")
+
 	configYaml := `deployment:
   enabled: true
   namespace: ""
   eventConfig:
     category: "test-category"
-    source: "test-source"
   exclude:
     namespace: []
     labels: {}
@@ -67,6 +71,10 @@ configmap:
 
 	if config.Deployment.Enabled != true {
 		t.Fatalf("deployment should be enabled")
+	}
+
+	if config.Deployment.EventConfig.Source != "vova" {
+		t.Fatal("value:", config.Deployment.EventConfig.Source)
 	}
 
 }

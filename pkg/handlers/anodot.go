@@ -3,13 +3,12 @@ package handlers
 import (
 	"github.com/anodot/anodot-common/pkg/client"
 	"github.com/anodot/anodot-common/pkg/events"
+	"github.com/anodot/kube-events/pkg/configuration"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	log "k8s.io/klog/v2"
 	"strings"
 	"time"
-
-	"net/url"
 )
 import "github.com/anodot/anodot-common/pkg/api"
 
@@ -39,41 +38,36 @@ type KubernetesEventsHandler interface {
 	SupportedEvent() string
 }
 
-type UserEventConfiguration struct {
-	Source     string
-	Category   string
-	Properties map[string]string
-}
-
 type AnodotEventhandler struct {
-	anodotApi *api.Api
-
-	handlers   map[string]KubernetesEventsHandler
-	eventProps UserEventConfiguration
+	anodotApi     *api.Api
+	handlers      map[string]KubernetesEventsHandler
+	configuration configuration.Configuration
 }
 
-func NewAnodotEventHandler(anodotURL url.URL, apiToken string, eventConfig UserEventConfiguration) (*AnodotEventhandler, error) {
+func NewAnodotEventHandler(anodotURL string, apiToken string, config configuration.Configuration) (*AnodotEventhandler, error) {
 	anodotClient, err := client.NewAnodotClient(anodotURL, apiToken, nil)
 	if err != nil {
 		return nil, err
 	}
-	apiClient := api.NewApiClient(anodotClient)
+	apiClient, err := api.NewApiClient(anodotClient)
+	if err != nil {
+		return nil, err
+	}
 
-	deploymentHandler := DeploymentHandler{eventConfig}
-	configmapHandler := ConfigmapHandler{eventConfig}
-	daemonsetHandler := DaemonsetHandler{eventConfig}
-	statefulsetHandler := StatefulSetHandler{eventConfig}
+	deploymentHandler := DeploymentHandler{EventConfig: config.Deployment.EventConfig}
+	configmapHandler := ConfigmapHandler{EventConfig: config.ConfigMap.EventConfig}
+	daemonsetHandler := DaemonsetHandler{EventConfig: config.DaemonSet.EventConfig}
+	statefulsetHandler := StatefulSetHandler{EventConfig: config.StatefulSet.EventConfig}
 	//jobHandler := JobHandler{eventConfig}
 
 	return &AnodotEventhandler{
-		anodotApi:  &apiClient,
-		eventProps: eventConfig,
+		anodotApi:     apiClient,
+		configuration: config,
 		handlers: map[string]KubernetesEventsHandler{
 			strings.ToLower(deploymentHandler.SupportedEvent()):  &deploymentHandler,
 			strings.ToLower(configmapHandler.SupportedEvent()):   &configmapHandler,
 			strings.ToLower(daemonsetHandler.SupportedEvent()):   &deploymentHandler,
 			strings.ToLower(statefulsetHandler.SupportedEvent()): &statefulsetHandler,
-			//	jobHandler.SupportedEvent():         &jobHandler,
 		}}, nil
 }
 
@@ -91,7 +85,7 @@ func (a *AnodotEventhandler) Handle(event Event) {
 			go func(e events.Event) {
 				ts := time.Now()
 
-				for k, v := range a.eventProps.Properties {
+				for k, v := range a.configuration.Properties {
 					e.Properties = append(e.Properties, events.EventProperties{
 						Key:   k,
 						Value: v,

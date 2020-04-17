@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"github.com/anodot/anodot-common/pkg/common"
 	"github.com/anodot/anodot-common/pkg/events"
+	"github.com/anodot/kube-events/pkg/configuration"
+	"github.com/anodot/kube-events/pkg/utils"
 	v1 "k8s.io/api/apps/v1"
 )
 
 type DaemonsetHandler struct {
-	UserEventConfiguration
+	configuration.EventConfig
 }
 
 func (d *DaemonsetHandler) SupportedEvent() string {
@@ -28,7 +30,7 @@ func (d *DaemonsetHandler) EventData(event Event) ([]events.Event, error) {
 		newDep := event.New.(*v1.DaemonSet)
 		oldDeployment := event.Old.(*v1.DaemonSet)
 
-		deploymentName := newDep.Name
+		daemonset := newDep.Name
 
 		//image changed
 		for _, newC := range newDep.Spec.Template.Spec.Containers {
@@ -36,12 +38,12 @@ func (d *DaemonsetHandler) EventData(event Event) ([]events.Event, error) {
 				if newC.Name == oldC.Name {
 					if newC.Image != oldC.Image {
 						res := events.Event{
-							Title:       fmt.Sprintf("'%s' daemonset image changed", deploymentName),
-							Description: fmt.Sprintf("%s image daemonset from '%s' to '%s'", deploymentName, oldC.Image, newC.Image),
+							Title:       fmt.Sprintf("'%s' daemonset container image changed", daemonset),
+							Description: utils.ImageChangedMessage(oldC.Image, newC.Image),
 							Category:    d.Category,
 							Source:      d.Source,
 							Properties: []events.EventProperties{
-								{Key: "daemonset", Value: deploymentName},
+								{Key: "daemonset", Value: daemonset},
 								{Key: "namespace", Value: newDep.Namespace},
 								{Key: "container", Value: newC.Name}},
 							StartDate: common.AnodotTimestamp{Time: event.EventTime},

@@ -71,6 +71,5 @@ version-set:
 	echo "Version $(VERSION) set in code, deployment, chart"
 
 vendor-update:
-	GOFLAGS="" GO111MODULE=on go get -u ./pkg/...
 	GO111MODULE=on go mod tidy
 	GO111MODULE=on go mod vendor

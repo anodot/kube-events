@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"github.com/anodot/anodot-common/pkg/common"
 	"github.com/anodot/anodot-common/pkg/events"
+	"github.com/anodot/kube-events/pkg/configuration"
+	"github.com/anodot/kube-events/pkg/utils"
 	apps_v1beta1 "k8s.io/api/apps/v1beta1"
 )
 
 type DeploymentHandler struct {
-	UserEventConfiguration
+	configuration.EventConfig
 }
 
 func (d *DeploymentHandler) SupportedEvent() string {
@@ -50,8 +52,8 @@ func (d *DeploymentHandler) EventData(event Event) ([]events.Event, error) {
 				if newC.Name == oldC.Name {
 					if newC.Image != oldC.Image {
 						res := events.Event{
-							Title:       fmt.Sprintf("'%s' deployment image changed", deploymentName),
-							Description: fmt.Sprintf("%s image changed from '%s' to '%s'", deploymentName, oldC.Image, newC.Image),
+							Title:       fmt.Sprintf("'%s' deployment container image changed", deploymentName),
+							Description: utils.ImageChangedMessage(oldC.Image, newC.Image),
 							Category:    d.Category,
 							Source:      d.Source,
 							Properties: []events.EventProperties{

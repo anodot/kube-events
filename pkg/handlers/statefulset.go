@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"github.com/anodot/anodot-common/pkg/common"
 	"github.com/anodot/anodot-common/pkg/events"
+	"github.com/anodot/kube-events/pkg/configuration"
+	"github.com/anodot/kube-events/pkg/utils"
 	v1 "k8s.io/api/apps/v1"
 )
 
 type StatefulSetHandler struct {
-	UserEventConfiguration
+	configuration.EventConfig
 }
 
 func (s *StatefulSetHandler) SupportedEvent() string {
@@ -50,8 +52,8 @@ func (s *StatefulSetHandler) EventData(event Event) ([]events.Event, error) {
 				if newC.Name == oldC.Name {
 					if newC.Image != oldC.Image {
 						res := events.Event{
-							Title:       fmt.Sprintf("'%s' statefulset image changed", stsName),
-							Description: fmt.Sprintf("%s image changed from '%s' to '%s'", stsName, oldC.Image, newC.Image),
+							Title:       fmt.Sprintf("'%s' statefulset container image changed", stsName),
+							Description: utils.ImageChangedMessage(oldC.Image, newC.Image),
 							Category:    s.Category,
 							Source:      s.Source,
 							Properties: []events.EventProperties{

@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"fmt"
+	dockerparser "github.com/novln/docker-parser"
 	"github.com/sirupsen/logrus"
 	"os"
 
@@ -82,4 +84,26 @@ func GetObjectMetaData(obj interface{}) meta_v1.ObjectMeta {
 		objectMeta = object.ObjectMeta
 	}
 	return objectMeta
+}
+
+func ImageChangedMessage(first, second string) string {
+	template := "Changed from '%s' to '%s'"
+	defaultMessage := fmt.Sprintf(template, first, second)
+
+	firstImage, err := dockerparser.Parse(first)
+	if err != nil {
+		return defaultMessage
+	}
+
+	secondImage, err := dockerparser.Parse(second)
+	if err != nil {
+		return defaultMessage
+
+	}
+
+	if firstImage.Repository() == secondImage.Repository() {
+		return fmt.Sprintf(template, firstImage.Name(), secondImage.Name())
+	}
+
+	return defaultMessage
 }
