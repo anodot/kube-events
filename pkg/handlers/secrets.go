@@ -38,6 +38,5 @@ func (d *SecretHandler) EventData(event Event) ([]events.Event, error) {
 	case "delete":
 
 	}
-	fmt.Println(allEvents)
 	return allEvents, nil
 }
