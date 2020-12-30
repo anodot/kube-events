@@ -1,16 +1,17 @@
 package handlers
 
 import (
+	"strings"
+	"time"
+
+	"github.com/anodot/anodot-common/pkg/api"
 	"github.com/anodot/anodot-common/pkg/client"
 	"github.com/anodot/anodot-common/pkg/events"
 	"github.com/anodot/kube-events/pkg/configuration"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	log "k8s.io/klog/v2"
-	"strings"
-	"time"
 )
-import "github.com/anodot/anodot-common/pkg/api"
 
 var labels = []string{"anodot_url"}
 
@@ -58,6 +59,7 @@ func NewAnodotEventHandler(anodotURL string, apiToken string, config configurati
 	configmapHandler := ConfigmapHandler{EventConfig: config.ConfigMap.EventConfig}
 	daemonsetHandler := DaemonsetHandler{EventConfig: config.DaemonSet.EventConfig}
 	statefulsetHandler := StatefulSetHandler{EventConfig: config.StatefulSet.EventConfig}
+	secretsHandler := SecretHandler{EventConfig: config.Secret.EventConfig}
 	//jobHandler := JobHandler{eventConfig}
 
 	return &AnodotEventhandler{
@@ -68,6 +70,7 @@ func NewAnodotEventHandler(anodotURL string, apiToken string, config configurati
 			strings.ToLower(configmapHandler.SupportedEvent()):   &configmapHandler,
 			strings.ToLower(daemonsetHandler.SupportedEvent()):   &deploymentHandler,
 			strings.ToLower(statefulsetHandler.SupportedEvent()): &statefulsetHandler,
+			strings.ToLower(secretsHandler.SupportedEvent()):     &secretsHandler,
 		}}, nil
 }
 

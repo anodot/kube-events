@@ -2,6 +2,12 @@ package controller
 
 import (
 	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/anodot/kube-events/pkg/configuration"
 	"github.com/anodot/kube-events/pkg/handlers"
 	"github.com/anodot/kube-events/pkg/utils"
@@ -10,11 +16,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	k8sruntime "k8s.io/apimachinery/pkg/util/runtime"
 	log "k8s.io/klog/v2"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	apps_v1beta1 "k8s.io/api/apps/v1beta1"
 	batch_v1 "k8s.io/api/batch/v1"
@@ -75,6 +76,28 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 			log.Error("failed to initialize metrics endpoint: ", err.Error())
 		}
 	}()
+
+	if conf.Secret.Enabled {
+		informer := cache.NewSharedIndexInformer(
+			&cache.ListWatch{
+				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
+					return kubeClient.CoreV1().Secrets(conf.Pod.Namespace).List(options)
+				},
+				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
+					return kubeClient.CoreV1().Secrets(conf.Pod.Namespace).Watch(options)
+				},
+			},
+			&api_v1.Secret{},
+			0, //Skip resync
+			cache.Indexers{},
+		)
+
+		c := newResourceController(kubeClient, eventHandler, informer, "secret", conf.Secret.FilterOptions)
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+
+		go c.Run(stopCh)
+	}
 
 	if conf.Pod.Enabled {
 		informer := cache.NewSharedIndexInformer(
