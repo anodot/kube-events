@@ -81,10 +81,10 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().Secrets(conf.Pod.Namespace).List(options)
+					return kubeClient.CoreV1().Secrets(conf.Secret.Namespace).List(options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().Secrets(conf.Pod.Namespace).Watch(options)
+					return kubeClient.CoreV1().Secrets(conf.Secret.Namespace).Watch(options)
 				},
 			},
 			&api_v1.Secret{},
