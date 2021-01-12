@@ -3,15 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"runtime"
+	"strings"
+
 	"github.com/anodot/kube-events/pkg/configuration"
 	"github.com/anodot/kube-events/pkg/controller"
 	"github.com/anodot/kube-events/pkg/handlers"
 	"github.com/anodot/kube-events/pkg/version"
-	"io/ioutil"
 	log "k8s.io/klog/v2"
-	"os"
-	"runtime"
-	"strings"
 )
 
 func main() {

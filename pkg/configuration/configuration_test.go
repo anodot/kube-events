@@ -2,11 +2,12 @@ package configuration
 
 import (
 	"fmt"
+	"os"
+	"testing"
+
 	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"os"
-	"testing"
 )
 
 func TestMarshl(t *testing.T) {
@@ -43,8 +44,16 @@ func TestMarshl(t *testing.T) {
 
 func TestUnmarshall(t *testing.T) {
 
-	os.Setenv("ANODOT_EVENT_SOURCE", "vova")
-	os.Setenv("ANODOT_EVENT_CATEGORY", "vova-cat")
+	err := os.Setenv("ANODOT_EVENT_SOURCE", "vova")
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	err = os.Setenv("ANODOT_EVENT_CATEGORY", "vova-cat")
+
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	configYaml := `deployment:
   enabled: true

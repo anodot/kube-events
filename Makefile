@@ -17,8 +17,7 @@ GIT_COMMIT := $(shell git describe --dirty --always)
 all: clean format vet test build build-container test-container
 publish-container: clean format vet test build build-container test-container push-container
 lint: check-formatting errorcheck vet
-test-all: test build build-container test-container
-
+test-all: test build
 clean:
 	@rm -rf $(APPLICATION_NAME)
 	docker rmi -f `docker images $(DOCKER_IMAGE_NAME):$(VERSION) -a -q` || true
@@ -50,16 +49,8 @@ build-container: build
 test:
 	GOFLAGS=$(GOFLAGS) $(GO) test -v -race -coverprofile=coverage.txt -covermode=atomic -timeout 10s ./pkg/...
 
-test-container: build-container
-	@docker rm -f $(APPLICATION_NAME) || true
-	@docker run -d -P --name=$(APPLICATION_NAME) $(DOCKER_IMAGE_NAME):$(VERSION) --token abc --url http://localhost
-	docker ps
-	set -x curl --connect-timeout 5 --max-time 10 --retry 5 --retry-delay 0 --retry-max-time 40 -I http://localhost:$$(docker port $(APPLICATION_NAME) | grep -o '[0-9]*$$' )/health
 
-	docker logs $(APPLICATION_NAME)
-	@docker rm -f $(APPLICATION_NAME)
-
-push-container: test-container
+push-container:
 	docker push $(DOCKER_IMAGE_NAME):$(VERSION)
 
 dockerhub-login:
