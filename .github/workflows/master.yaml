@@ -1,7 +1,8 @@
 on:
   push:
     branches:
-      - ci
+      - master
+      
 name: master-build
 jobs:
   test:
