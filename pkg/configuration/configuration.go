@@ -1,12 +1,13 @@
 package configuration
 
 import (
-	"gopkg.in/yaml.v2"
-	"k8s.io/apimachinery/pkg/api/meta"
-	log "k8s.io/klog/v2"
 	"os"
 	"regexp"
 	"strings"
+
+	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/api/meta"
+	log "k8s.io/klog/v2"
 )
 
 type Configuration struct {

@@ -78,7 +78,7 @@ func (d *DeploymentHandler) EventData(event Event) ([]events.Event, error) {
 						after := newC.Resources.Requests.Cpu().AsDec().String()
 
 						res := events.Event{
-							Title:       fmt.Sprintf("'%s' deployment  cpu requests changed", deploymentName),
+							Title:       fmt.Sprintf("'%s' deployment cpu requests changed", deploymentName),
 							Description: fmt.Sprintf("%s  cpu requests changed from '%s' to '%s'", deploymentName, before, after),
 							Category:    d.Category,
 							Source:      d.Source,
