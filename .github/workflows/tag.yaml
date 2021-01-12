@@ -23,7 +23,10 @@ jobs:
 
       - name: Run tests
         run: make test-all
-
+        
+      - name: Build container
+        run: make build-container
+        
       - name: Publish coverage
         uses: codecov/codecov-action@v1
         with:
