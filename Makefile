@@ -14,10 +14,11 @@ VERSION := $(shell grep 'VERSION' pkg/version/version.go | awk '{ print $$4 }' |
 PREVIOUS_VERSION := $(shell git show HEAD:pkg/version/version.go | grep 'VERSION' | awk '{ print $$4 }' | tr -d '"' )
 GIT_COMMIT := $(shell git describe --dirty --always)
 
-all: clean format vet test build build-container test-container
-publish-container: clean format vet test build build-container test-container push-container
+all: clean format vet test build build-container
+publish-container: clean format vet test build build-container push-container
 lint: check-formatting errorcheck vet
 test-all: test build
+
 clean:
 	@rm -rf $(APPLICATION_NAME)
 	docker rmi -f `docker images $(DOCKER_IMAGE_NAME):$(VERSION) -a -q` || true
@@ -48,7 +49,6 @@ build-container: build
 
 test:
 	GOFLAGS=$(GOFLAGS) $(GO) test -v -race -coverprofile=coverage.txt -covermode=atomic -timeout 10s ./pkg/...
-
 
 push-container:
 	docker push $(DOCKER_IMAGE_NAME):$(VERSION)
