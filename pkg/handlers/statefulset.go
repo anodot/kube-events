@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+
 	"github.com/anodot/anodot-common/pkg/common"
 	"github.com/anodot/anodot-common/pkg/events"
 	"github.com/anodot/kube-events/pkg/configuration"
@@ -27,8 +28,15 @@ func (s *StatefulSetHandler) EventData(event Event) ([]events.Event, error) {
 			return nil, fmt.Errorf("unable to retrieve deployment information")
 		}
 
-		newSts := event.New.(*v1.StatefulSet)
-		oldSts := event.Old.(*v1.StatefulSet)
+		newSts, ok := event.New.(*v1.StatefulSet)
+		if !ok {
+			return nil, fmt.Errorf("%v is not StatefulSet", event)
+		}
+
+		oldSts, ok := event.Old.(*v1.StatefulSet)
+		if !ok {
+			return nil, fmt.Errorf("%v is not StatefulSet", event)
+		}
 
 		stsName := newSts.Name
 

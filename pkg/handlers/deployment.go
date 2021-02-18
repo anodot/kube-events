@@ -28,8 +28,15 @@ func (d *DeploymentHandler) EventData(event Event) ([]events.Event, error) {
 			return nil, fmt.Errorf("unable to retrieve deployment information")
 		}
 
-		newDep := event.New.(*apps_v1beta1.Deployment)
-		oldDeployment := event.Old.(*apps_v1beta1.Deployment)
+		newDep, ok := event.New.(*apps_v1beta1.Deployment)
+		if !ok {
+			return nil, fmt.Errorf("%v is not deployment", event)
+		}
+
+		oldDeployment, ok := event.Old.(*apps_v1beta1.Deployment)
+		if !ok {
+			return nil, fmt.Errorf("%v is not deployment", event)
+		}
 
 		deploymentName := newDep.Name
 

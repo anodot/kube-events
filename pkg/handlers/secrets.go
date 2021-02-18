@@ -22,7 +22,10 @@ func (d *SecretHandler) EventData(event Event) ([]events.Event, error) {
 	switch event.EventType {
 	case "update":
 		//newSecret := event.New.(*api_v1.Secret)
-		oldSecret := event.Old.(*api_v1.Secret)
+		oldSecret, ok := event.Old.(*api_v1.Secret)
+		if !ok {
+			return nil, fmt.Errorf("%v is not secret", event)
+		}
 		res := events.Event{
 			Title:       fmt.Sprintf("'%s' secret has been changed", oldSecret.Name),
 			Description: fmt.Sprintf("%s secret has been changed", oldSecret.Name),

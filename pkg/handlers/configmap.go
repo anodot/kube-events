@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+
 	"github.com/anodot/anodot-common/pkg/common"
 	"github.com/anodot/anodot-common/pkg/events"
 	"github.com/anodot/kube-events/pkg/configuration"
@@ -17,7 +18,11 @@ func (c *ConfigmapHandler) EventData(event Event) ([]events.Event, error) {
 		return nil, fmt.Errorf("unable to retrieve configmap information")
 	}
 
-	newCM := event.New.(*api_v1.ConfigMap)
+	newCM, ok := event.New.(*api_v1.ConfigMap)
+	if !ok {
+		return nil, fmt.Errorf("%v is not configmap", event)
+	}
+
 	cmName := newCM.Name
 
 	allEvents := make([]events.Event, 0)
