@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+
 	"github.com/anodot/anodot-common/pkg/common"
 	"github.com/anodot/anodot-common/pkg/events"
 	"github.com/anodot/kube-events/pkg/configuration"
@@ -27,8 +28,14 @@ func (d *DaemonsetHandler) EventData(event Event) ([]events.Event, error) {
 			return nil, fmt.Errorf("unable to retrieve deployment information")
 		}
 
-		newDep := event.New.(*v1.DaemonSet)
-		oldDeployment := event.Old.(*v1.DaemonSet)
+		newDep, ok := event.New.(*v1.DaemonSet)
+		if !ok {
+			return nil, fmt.Errorf("%v is not DaemonSet", event)
+		}
+		oldDeployment, ok := event.Old.(*v1.DaemonSet)
+		if !ok {
+			return nil, fmt.Errorf("%v is not DaemonSet", event)
+		}
 
 		daemonset := newDep.Name
 

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+
 	"github.com/anodot/anodot-common/pkg/common"
 	"github.com/anodot/anodot-common/pkg/events"
 	"github.com/anodot/kube-events/pkg/configuration"
@@ -25,7 +26,10 @@ func (d *JobHandler) EventData(event Event) ([]events.Event, error) {
 			return nil, fmt.Errorf("unable to retrieve job information")
 		}
 
-		newJob := event.New.(*v1.Job)
+		newJob, ok := event.New.(*v1.Job)
+		if !ok {
+			return nil, fmt.Errorf("%v is not job", event)
+		}
 		jobName := newJob.Name
 
 		allEvents = append(allEvents, events.Event{
