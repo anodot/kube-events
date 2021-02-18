@@ -378,7 +378,7 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 			cache.Indexers{},
 		)
 
-		c := newResourceController(kubeClient, eventHandler, informer, "ingress", conf.Ingress.FilterOptions)
+		c := newResourceController(kubeClient, eventHandler, informer, "statefulset", conf.StatefulSet.FilterOptions)
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
