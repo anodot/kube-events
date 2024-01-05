@@ -8,7 +8,12 @@ GOLINT_VERSION:=1.24.0
 
 BUILD_FLAGS = GO111MODULE=on CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) GOFLAGS=$(GOFLAGS)
 APPLICATION_NAME := anodot-kube-events
-DOCKER_IMAGE_NAME := anodot/anodot-kube-events
+
+AWS_REGION := us-east-1
+AWS_ECR := 932213950603.dkr.ecr.$(AWS_REGION).amazonaws.com
+DOCKER_IMAGE_NAME := $(AWS_ECR)/$(APPLICATION_NAME)
+
+ENVIRONMENT := dev
 
 VERSION := $(shell grep 'VERSION' pkg/version/version.go | awk '{ print $$4 }' | tr -d '"')
 PREVIOUS_VERSION := $(shell git show HEAD:pkg/version/version.go | grep 'VERSION' | awk '{ print $$4 }' | tr -d '"' )
@@ -44,13 +49,15 @@ build:
 	$(BUILD_FLAGS) $(GO) build -ldflags "-s -w -X github.com/anodot/github.com/anodot/kube-events/pkg/version.REVISION=$(GIT_COMMIT)" -o $(APPLICATION_NAME)
 
 build-container: build
-	docker build -t $(DOCKER_IMAGE_NAME):$(VERSION) .
+	docker build -t $(APPLICATION_NAME):$(VERSION) .
+	docker tag $(APPLICATION_NAME):$(VERSION) $(DOCKER_IMAGE_NAME):$(VERSION)
 	@echo ">> created docker image $(DOCKER_IMAGE_NAME):$(VERSION)"
 
 test:
 	GOFLAGS=$(GOFLAGS) $(GO) test -v -race -coverprofile=coverage.txt -covermode=atomic -timeout 10s ./pkg/...
 
 push-container:
+	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ECR)
 	docker push $(DOCKER_IMAGE_NAME):$(VERSION)
 
 dockerhub-login:
@@ -62,3 +69,6 @@ version-set:
 vendor-update:
 	GO111MODULE=on go mod tidy
 	GO111MODULE=on go mod vendor
+
+deploy:
+	helm upgrade $(APPLICATION_NAME) ./helm --install --values=helm/values-$(ENVIRONMENT).yaml --set base-chart.image.tag=$(VERSION) -n $(APPLICATION_NAME) --debug

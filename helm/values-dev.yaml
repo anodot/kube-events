@@ -1,0 +1,23 @@
+base-chart:
+
+  extraEnv:
+    ANODOT_EVENT_CONFIG_LOCATION: "/mnt/config.yaml"
+    ANODOT_LOG_LEVEL: 4
+    ANODOT_URL: ""
+    ANODOT_API_TOKEN: "dummy"
+
+  ingress:
+    enabled: true
+    className: internal
+    # annotations:
+    #   kubernetes.io/ingress.class: internal
+    paths: /
+    hosts:
+      - anodot-kube-events.dev-int.mypileus.io
+
+  configmap:
+    enabled: true
+    mountPath: /mnt/
+    data:
+      config.yaml: |
+        key: value
