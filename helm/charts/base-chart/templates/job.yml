@@ -1,0 +1,48 @@
+{{- if .Values.dbmigration.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "base-chart.name" . }}
+  labels:
+    app: {{ template "base-chart.name" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: {{ .Release.Name | quote }}
+    heritage: {{ .Release.Service | quote }}
+  {{- if .Values.service }}
+  {{- range $key, $value := .Values.service.labels }}
+    {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- end }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+# TTL feature is enabled by default in 1.21 version
+  ttlSecondsAfterFinished: 100
+  activeDeadlineSeconds: 240
+  template:
+    metadata:
+      name: {{ template "base-chart.name" . }}-job
+      labels:
+        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+        release: {{ .Release.Name }}
+        heritage: {{ .Release.Service }}
+    spec:
+      containers:
+        - name: "{{ template "base-chart.name" . }}"
+          image: {{ .Values.dbmigration.image.repository }}:{{- .Values.image.tag }}
+          imagePullPolicy: {{ .Values.dbmigration.image.pullPolicy }}
+          envFrom:
+          {{- if .Values.externalSecret.enabled }}
+          - secretRef:
+              name: "{{ template "base-chart.name" . }}"
+          {{- end }}
+          env:
+{{- range $key, $value := .Values.extraEnv }}
+          - name: "{{ $key }}"
+            value: "{{ tpl ($value | toString) $ }}"
+{{- end }}
+      restartPolicy: Never
+  backoffLimit: 1
+{{- end }}

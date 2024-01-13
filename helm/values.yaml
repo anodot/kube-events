@@ -13,7 +13,7 @@ base-chart:
 
 
   resources:
-    limits:
+    # limits:
       #cpu: 2000m
       # memory: 4000M
     requests:
@@ -40,3 +40,21 @@ base-chart:
     paths: /
     # hosts:
     #   - app-name.dev-int.mypileus.io
+
+  clusterRole:
+    enabled: true
+    name: kube-events-role
+    rules:
+      - apiGroups: [""]
+        resources: ["pods", "replicasets", "deployments", "daemonsets"]
+        verbs: ["get", "list", "patch", "watch"]
+      - apiGroups: ["apps"]
+        resources: ["replicasets", "deployments", "daemonsets"]
+        verbs: ["get", "list", "patch", "watch"]
+
+  clusterRoleBinding:
+    enabled: true
+    name: kube-events-role-binding
+    roleName: kube-events-role
+    serviceAccountName: anodot-kube-events-serviceaccount
+    namespace: anodot-kube-events

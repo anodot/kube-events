@@ -25,7 +25,7 @@ func (d *DaemonsetHandler) EventData(event Event) ([]events.Event, error) {
 	case "update":
 		if event.New == nil || event.Old == nil {
 			//TODO better error message
-			return nil, fmt.Errorf("unable to retrieve deployment information")
+			return nil, fmt.Errorf("unable to retrieve DaemonSet information")
 		}
 
 		newDep, ok := event.New.(*v1.DaemonSet)

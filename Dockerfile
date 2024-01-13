@@ -1,4 +1,4 @@
-FROM alpine:3.11
+FROM alpine:3.18.5
 
 RUN apk add --no-cache ca-certificates && apk update
 COPY anodot-kube-events /go/bin/anodot-kube-events

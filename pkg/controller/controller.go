@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"context"
 
 	"github.com/anodot/kube-events/pkg/configuration"
 	"github.com/anodot/kube-events/pkg/handlers"
@@ -16,11 +17,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	k8sruntime "k8s.io/apimachinery/pkg/util/runtime"
 	log "k8s.io/klog/v2"
-
-	apps_v1beta1 "k8s.io/api/apps/v1beta1"
+	apps_v1 "k8s.io/api/apps/v1"
 	batch_v1 "k8s.io/api/batch/v1"
 	api_v1 "k8s.io/api/core/v1"
-	ext_v1beta1 "k8s.io/api/extensions/v1beta1"
+	networking_v1 "k8s.io/api/networking/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -81,10 +81,10 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().Secrets(conf.Secret.Namespace).List(options)
+					return kubeClient.CoreV1().Secrets(conf.Secret.Namespace).List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().Secrets(conf.Secret.Namespace).Watch(options)
+					return kubeClient.CoreV1().Secrets(conf.Secret.Namespace).Watch(context.TODO(),options)
 				},
 			},
 			&api_v1.Secret{},
@@ -103,10 +103,10 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().Pods(conf.Pod.Namespace).List(options)
+					return kubeClient.CoreV1().Pods(conf.Pod.Namespace).List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().Pods(conf.Pod.Namespace).Watch(options)
+					return kubeClient.CoreV1().Pods(conf.Pod.Namespace).Watch(context.TODO(),options)
 				},
 			},
 			&api_v1.Pod{},
@@ -125,13 +125,13 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.ExtensionsV1beta1().DaemonSets(conf.DaemonSet.Namespace).List(options)
+					return kubeClient.AppsV1().DaemonSets(conf.DaemonSet.Namespace).List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.ExtensionsV1beta1().DaemonSets(conf.DaemonSet.Namespace).Watch(options)
+					return kubeClient.AppsV1().DaemonSets(conf.DaemonSet.Namespace).Watch(context.TODO(),options)
 				},
 			},
-			&ext_v1beta1.DaemonSet{},
+			&apps_v1.DaemonSet{},
 			0, //Skip resync
 			cache.Indexers{},
 		)
@@ -147,13 +147,13 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.ExtensionsV1beta1().ReplicaSets(conf.ReplicaSet.Namespace).List(options)
+					return kubeClient.AppsV1().ReplicaSets(conf.ReplicaSet.Namespace).List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.ExtensionsV1beta1().ReplicaSets(conf.ReplicaSet.Namespace).Watch(options)
+					return kubeClient.AppsV1().ReplicaSets(conf.ReplicaSet.Namespace).Watch(context.TODO(),options)
 				},
 			},
-			&ext_v1beta1.ReplicaSet{},
+			&apps_v1.ReplicaSet{},
 			0, //Skip resync
 			cache.Indexers{},
 		)
@@ -169,10 +169,10 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().Services(conf.Services.Namespace).List(options)
+					return kubeClient.CoreV1().Services(conf.Services.Namespace).List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().Services(conf.Services.Namespace).Watch(options)
+					return kubeClient.CoreV1().Services(conf.Services.Namespace).Watch(context.TODO(),options)
 				},
 			},
 			&api_v1.Service{},
@@ -191,13 +191,13 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.AppsV1beta1().Deployments(conf.Deployment.Namespace).List(options)
+					return kubeClient.AppsV1().Deployments(conf.Deployment.Namespace).List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.AppsV1beta1().Deployments(conf.Deployment.Namespace).Watch(options)
+					return kubeClient.AppsV1().Deployments(conf.Deployment.Namespace).Watch(context.TODO(),options)
 				},
 			},
-			&apps_v1beta1.Deployment{},
+			&apps_v1.Deployment{},
 			0, //Skip resync
 			cache.Indexers{},
 		)
@@ -213,10 +213,10 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().Namespaces().List(options)
+					return kubeClient.CoreV1().Namespaces().List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().Namespaces().Watch(options)
+					return kubeClient.CoreV1().Namespaces().Watch(context.TODO(),options)
 				},
 			},
 			&api_v1.Namespace{},
@@ -235,10 +235,10 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().ReplicationControllers(conf.ReplicationController.Namespace).List(options)
+					return kubeClient.CoreV1().ReplicationControllers(conf.ReplicationController.Namespace).List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().ReplicationControllers(conf.ReplicationController.Namespace).Watch(options)
+					return kubeClient.CoreV1().ReplicationControllers(conf.ReplicationController.Namespace).Watch(context.TODO(),options)
 				},
 			},
 			&api_v1.ReplicationController{},
@@ -257,10 +257,10 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.BatchV1().Jobs(conf.Job.Namespace).List(options)
+					return kubeClient.BatchV1().Jobs(conf.Job.Namespace).List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.BatchV1().Jobs(conf.Job.Namespace).Watch(options)
+					return kubeClient.BatchV1().Jobs(conf.Job.Namespace).Watch(context.TODO(),options)
 				},
 			},
 			&batch_v1.Job{},
@@ -279,10 +279,10 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().PersistentVolumes().List(options)
+					return kubeClient.CoreV1().PersistentVolumes().List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().PersistentVolumes().Watch(options)
+					return kubeClient.CoreV1().PersistentVolumes().Watch(context.TODO(),options)
 				},
 			},
 			&api_v1.PersistentVolume{},
@@ -301,10 +301,10 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().Secrets(conf.Secret.Namespace).List(options)
+					return kubeClient.CoreV1().Secrets(conf.Secret.Namespace).List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().Secrets(conf.Secret.Namespace).Watch(options)
+					return kubeClient.CoreV1().Secrets(conf.Secret.Namespace).Watch(context.TODO(),options)
 				},
 			},
 			&api_v1.Secret{},
@@ -323,10 +323,10 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().ConfigMaps(conf.ConfigMap.Namespace).List(options)
+					return kubeClient.CoreV1().ConfigMaps(conf.ConfigMap.Namespace).List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().ConfigMaps(conf.ConfigMap.Namespace).Watch(options)
+					return kubeClient.CoreV1().ConfigMaps(conf.ConfigMap.Namespace).Watch(context.TODO(),options)
 				},
 			},
 			&api_v1.ConfigMap{},
@@ -345,13 +345,13 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.ExtensionsV1beta1().Ingresses(conf.Ingress.Namespace).List(options)
+					return kubeClient.NetworkingV1().Ingresses(conf.Ingress.Namespace).List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.ExtensionsV1beta1().Ingresses(conf.Ingress.Namespace).Watch(options)
+					return kubeClient.NetworkingV1().Ingresses(conf.Ingress.Namespace).Watch(context.TODO(),options)
 				},
 			},
-			&ext_v1beta1.Ingress{},
+			&networking_v1.Ingress{},
 			0, //Skip resync
 			cache.Indexers{},
 		)
@@ -367,13 +367,13 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		informer := cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.AppsV1beta1().StatefulSets(conf.StatefulSet.Namespace).List(options)
+					return kubeClient.AppsV1().StatefulSets(conf.StatefulSet.Namespace).List(context.TODO(),options)
 				},
 				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.AppsV1beta1().StatefulSets(conf.StatefulSet.Namespace).Watch(options)
+					return kubeClient.AppsV1().StatefulSets(conf.StatefulSet.Namespace).Watch(context.TODO(),options)
 				},
 			},
-			&apps_v1beta1.StatefulSet{},
+			&apps_v1.StatefulSet{},
 			0, //Skip resync
 			cache.Indexers{},
 		)

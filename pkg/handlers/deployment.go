@@ -7,7 +7,7 @@ import (
 	"github.com/anodot/anodot-common/pkg/events"
 	"github.com/anodot/kube-events/pkg/configuration"
 	"github.com/anodot/kube-events/pkg/utils"
-	apps_v1beta1 "k8s.io/api/apps/v1beta1"
+	apps_v1 "k8s.io/api/apps/v1"
 )
 
 type DeploymentHandler struct {
@@ -28,12 +28,12 @@ func (d *DeploymentHandler) EventData(event Event) ([]events.Event, error) {
 			return nil, fmt.Errorf("unable to retrieve deployment information")
 		}
 
-		newDep, ok := event.New.(*apps_v1beta1.Deployment)
+		newDep, ok := event.New.(*apps_v1.Deployment)
 		if !ok {
 			return nil, fmt.Errorf("%v is not deployment", event)
 		}
 
-		oldDeployment, ok := event.Old.(*apps_v1beta1.Deployment)
+		oldDeployment, ok := event.Old.(*apps_v1.Deployment)
 		if !ok {
 			return nil, fmt.Errorf("%v is not deployment", event)
 		}

@@ -1,0 +1,10 @@
+nameOverride: "config-server-srv"
+fullnameOverride: "config-server-srv"
+image:
+  repository: 932213950603.dkr.ecr.us-east-1.amazonaws.com/config-server-srv
+  tag: "rls_2023-07-07-19-35-7ca0693"
+  pullPolicy: Always
+# extraEnv:
+#   SPRING_PROFILES_ACTIVE: dev
+replicaCount: 1
+recreatePods: true
