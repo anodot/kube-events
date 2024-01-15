@@ -60,6 +60,7 @@ func NewAnodotEventHandler(anodotURL string, apiToken string, config configurati
 	daemonsetHandler := DaemonsetHandler{EventConfig: config.DaemonSet.EventConfig}
 	statefulsetHandler := StatefulSetHandler{EventConfig: config.StatefulSet.EventConfig}
 	secretsHandler := SecretHandler{EventConfig: config.Secret.EventConfig}
+	nodeHandler := NodeHandler{EventConfig: config.Node.EventConfig}
 	//jobHandler := JobHandler{eventConfig}
 
 	return &AnodotEventhandler{
@@ -71,6 +72,7 @@ func NewAnodotEventHandler(anodotURL string, apiToken string, config configurati
 			strings.ToLower(daemonsetHandler.SupportedEvent()):   &deploymentHandler,
 			strings.ToLower(statefulsetHandler.SupportedEvent()): &statefulsetHandler,
 			strings.ToLower(secretsHandler.SupportedEvent()):     &secretsHandler,
+			strings.ToLower(nodeHandler.SupportedEvent()):        &nodeHandler,
 		}}, nil
 }
 

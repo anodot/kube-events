@@ -46,11 +46,11 @@ base-chart:
     name: kube-events-role
     rules:
       - apiGroups: [""]
-        resources: ["pods", "replicasets", "deployments", "daemonsets"]
-        verbs: ["get", "list", "patch", "watch"]
+        resources: ["pods", "replicasets", "deployments", "daemonsets", "nodes"]
+        verbs: ["get", "list", "watch"]
       - apiGroups: ["apps"]
         resources: ["replicasets", "deployments", "daemonsets"]
-        verbs: ["get", "list", "patch", "watch"]
+        verbs: ["get", "list", "watch"]
 
   clusterRoleBinding:
     enabled: true

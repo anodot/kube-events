@@ -385,6 +385,29 @@ func Start(conf configuration.Configuration, eventHandler *handlers.AnodotEventh
 		go c.Run(stopCh)
 	}
 
+	if conf.Node.Enabled {
+		informer := cache.NewSharedIndexInformer(
+			// ... set up ListFunc and WatchFunc for nodes ...
+			&cache.ListWatch{
+				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
+					return kubeClient.CoreV1().Nodes().List(context.Background(), options)
+				},
+				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
+					return kubeClient.CoreV1().Nodes().Watch(context.Background(), options)
+				},
+			},
+			&api_v1.Node{},
+			0, // Skip resync
+			cache.Indexers{},
+		)
+	
+		c := newResourceController(kubeClient, eventHandler, informer, "node", conf.Node.FilterOptions)
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+	
+		go c.Run(stopCh)
+	}
+
 	sigterm := make(chan os.Signal, 1)
 	signal.Notify(sigterm, syscall.SIGTERM)
 	signal.Notify(sigterm, syscall.SIGINT)

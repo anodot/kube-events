@@ -24,6 +24,7 @@ type Configuration struct {
 	Secret                Resource
 	ConfigMap             Resource
 	Ingress               Resource
+	Node 				  Resource
 
 	Properties map[string]string `yaml:"-,omitempty"`
 }

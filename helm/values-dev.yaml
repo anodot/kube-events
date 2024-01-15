@@ -37,3 +37,35 @@ base-chart:
           namespace: default
           eventConfig:
             category: kube-events-test
+        node:
+          enabled: true
+          eventConfig:
+            category: kube-events-test
+
+  # configmap:
+  #     enabled: true
+  #     eventConfig:
+  #       category: configmap
+  #     exclude:
+  #       annotations:
+  #         control-plane.alpha.kubernetes.io/leader: .*
+  #       labels:
+  #         OWNER: TILLER
+  #   daemonset:
+  #     enabled: true
+  #     eventConfig:
+  #       category: daemonset
+  #   deployment:
+  #     enabled: true
+  #     eventConfig:
+  #       category: deployment
+  #   ingress:
+  #     enabled: false
+  #   job:
+  #     enabled: true
+  #   secret:
+  #     enabled: true
+  #   statefulset:
+  #     enabled: true
+  #     eventConfig:
+  #       category: statefulset
