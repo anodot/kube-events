@@ -17,16 +17,6 @@ base-chart:
     region: us-east-1
     backendType: systemManager
 
-
-  ingress:
-    enabled: true
-    className: internal
-    # annotations:
-    #   kubernetes.io/ingress.class: internal
-    paths: /
-    hosts:
-      - anodot-kube-events.dev-int.mypileus.io
-
   configmap:
     enabled: true
     mountPath: /mnt/
