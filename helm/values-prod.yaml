@@ -1,0 +1,5 @@
+base-chart:
+
+  extraEnv:
+    # EXCLUDE_NAMESPACE: "kube-system"
+    # INCLUDE_LABELS

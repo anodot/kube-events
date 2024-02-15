@@ -1,0 +1,61 @@
+base-chart:
+
+  extraEnv:
+    ANODOT_EVENT_CONFIG_LOCATION: "/mnt/config.yaml"    
+    ANODOT_EVENT_CATEGORY: "kube-events-test"
+    ANODOT_EVENT_SOURCE: "kube-events-test"
+    ANODOT_LOG_LEVEL: 5
+    ANODOT_HTTP_DEBUG_ENABLED: "true"
+    ANODOT_URL: "https://master.ano-dev.com"
+    ANODOT_ACCESS_KEY: "test-events"
+
+  externalSecret:
+    enabled: true
+    env:
+      ANODOT_API_TOKEN: "/dev/kube-events/ANODOT_API_TOKEN"
+    refreshInterval: "1h"
+    region: us-east-1
+    backendType: systemManager
+
+  configmap:
+    enabled: true
+    mountPath: /mnt/
+    data:
+      config.yaml: |-
+        deployment:
+          enabled: true
+          namespace: default
+          eventConfig:
+            category: kube-events-test
+        node:
+          enabled: true
+          eventConfig:
+            category: kube-events-test
+
+  # configmap:
+  #     enabled: true
+  #     eventConfig:
+  #       category: configmap
+  #     exclude:
+  #       annotations:
+  #         control-plane.alpha.kubernetes.io/leader: .*
+  #       labels:
+  #         OWNER: TILLER
+  #   daemonset:
+  #     enabled: true
+  #     eventConfig:
+  #       category: daemonset
+  #   deployment:
+  #     enabled: true
+  #     eventConfig:
+  #       category: deployment
+  #   ingress:
+  #     enabled: false
+  #   job:
+  #     enabled: true
+  #   secret:
+  #     enabled: true
+  #   statefulset:
+  #     enabled: true
+  #     eventConfig:
+  #       category: statefulset

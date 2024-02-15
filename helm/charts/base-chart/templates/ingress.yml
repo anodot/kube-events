@@ -1,0 +1,35 @@
+{{- if .Values.ingress.enabled }}
+{{- $serviceName := include "base-chart.name" . -}}
+{{- $servicePort := .Values.service.serverPort -}}
+{{- $paths := .Values.ingress.paths -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ template "base-chart.name" . }}
+  labels:
+    app: {{ template "base-chart.name" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: {{ .Release.Name | quote }}
+    heritage: {{ .Release.Service | quote }}
+{{- if .Values.ingress.annotations }}
+  annotations:
+{{ toYaml .Values.ingress.annotations | trimSuffix "\n" | indent 4 }}
+{{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  rules:
+  {{- range $host := .Values.ingress.hosts }}
+  - host: {{ $host }}
+    http:
+      paths:
+      - path: {{ $paths }}
+        pathType: ImplementationSpecific 
+        backend:
+          service:
+            name: {{ $serviceName }}
+            port: 
+              number: {{ $servicePort }}
+  {{- end }}
+{{- end }}

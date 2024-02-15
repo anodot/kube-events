@@ -1,0 +1,203 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "base-chart.name" . }}
+  labels:
+    app: {{ template "base-chart.name" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: {{ .Release.Name | quote }}
+    heritage: {{ .Release.Service | quote }}
+  {{- if .Values.deployment.labels }}
+  {{- range $key, $value := .Values.deployment.labels }}
+    {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- end }}
+  annotations:
+  {{- if .Values.deployment.annotations }}
+  {{- range $key, $value := .Values.deployment.annotations }}
+    {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "base-chart.name" . }}
+      release: {{ .Release.Name | quote }}
+  replicas: {{ .Values.replicaCount }}
+  {{- if .Values.deploymentStrategy }}
+  strategy:
+    rollingUpdate:
+      maxSurge: {{ include "getMaxSurge" .}}
+      maxUnavailable: {{ include "getMaxUnavailable" .}}
+    type: RollingUpdate
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "base-chart.name" . }}
+        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+        release: {{ .Release.Name | quote }}
+        heritage: {{ .Release.Service | quote }}
+      {{- if .Values.deployment.labels }}
+      {{- range $key, $value := .Values.deployment.labels }}
+        {{ $key }}: {{ $value | quote }}
+      {{- end }}
+      {{- end }}
+      annotations:
+      {{- if .Values.recreatePods }}
+          rollme: {{ randAlphaNum 5 | quote }}
+      {{- end }}
+    spec:
+      {{- if .Values.affinity.enabled }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - {{ template "base-chart.name" . }}
+              topologyKey:  {{ .Values.affinity.topologyKey }}
+      {{- end }}
+      # topologySpreadConstraints:
+      # - maxSkew: 1
+      #   topologyKey: failure-domain.beta.kubernetes.io/zone
+      #   whenUnsatisfiable: ScheduleAnyway
+      #   labelSelector:
+      #     matchLabels:
+      #       key: app
+      #       values: {{ template "base-chart.name" . }}
+      terminationGracePeriodSeconds: {{ .Values.deployment.terminationGracePeriodSeconds }}
+      containers:
+      {{- if .Values.sidecars  }}
+      {{- toYaml .Values.sidecars | nindent 6 }}
+      {{- end }}  
+      - name: "{{ template "base-chart.name" . }}"
+        image: {{ .Values.image.repository }}:{{- .Values.image.tag }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        envFrom:
+        {{- if .Values.externalSecret.enabled }}
+        - secretRef:
+            name: "{{ template "base-chart.name" . }}"
+        {{- end }}
+        env:
+       {{- if and (.Values.javaConfig.enabled) (.Values.javaConfig.heapSize) }}
+        - name: JAVA_OPTS
+          value: {{ include "getJavaOptsLine" . | quote }}
+       {{- end }}
+       {{- if and (.Values.javaConfig.enabled) (.Values.javaConfig.JMX_OPTS) }}
+        - name: JMX_OPTS
+          value: {{ join " " .Values.javaConfig.JMX_OPTS | quote }}
+       {{- end }}
+{{- range $key, $value := .Values.extraEnv }}
+        - name: "{{ $key }}"
+          value: "{{ tpl ($value | toString) $ }}"
+{{- end }}
+{{- if .Values.securityContext.enabled }}
+        securityContext:
+          capabilities:
+            drop:
+              - all
+            add:
+              - NET_BIND_SERVICE
+          readOnlyRootFilesystem: {{ .Values.securityContext.readOnlyRootFilesystem | default false }}
+          allowPrivilegeEscalation: {{ .Values.securityContext.allowPrivilegeEscalation | default true }}
+{{- end }}
+        lifecycle:
+{{ toYaml .Values.deployment.lifecycleHooks | indent 12 }}
+        ports:
+        - containerPort: {{ .Values.service.serverPort }}
+          name: {{ .Values.service.serverPortName }}
+        - containerPort: {{ .Values.service.managementPort }}
+          name: {{ .Values.service.managementPortName }}
+{{- if .Values.deployment.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.deployment.livenessProbe.path }}
+            port: {{ .Values.deployment.livenessProbe.port }}
+            scheme: HTTP
+          initialDelaySeconds: {{ .Values.deployment.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.deployment.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.deployment.livenessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.deployment.livenessProbe.successThreshold }}
+          failureThreshold: {{ .Values.deployment.livenessProbe.failureThreshold }}
+{{- end }}
+{{- if .Values.deployment.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.deployment.readinessProbe.path }}
+            port: {{ .Values.deployment.livenessProbe.port }}
+            scheme: HTTP
+          initialDelaySeconds: {{ .Values.deployment.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.deployment.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.deployment.readinessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.deployment.readinessProbe.successThreshold }}
+          failureThreshold: {{ .Values.deployment.readinessProbe.failureThreshold }}
+{{- end }}
+        resources:
+          {{- if and (.Values.javaConfig.enabled) (.Values.javaConfig.heapSize) }}
+            {{- include "checkHeapSizeFromat" .Values.javaConfig.heapSize}}
+            {{- $requestMemory := include "getRequestMemory" .Values.javaConfig.heapSize }}
+            {{- $limitMemory := include "getLimitMemory" .Values.javaConfig.heapSize }}
+            requests:
+              memory: "{{ $requestMemory }}Mi"
+              cpu: "{{ .Values.resources.requests.cpu }}"
+            limits:
+              memory: "{{ $limitMemory }}Mi"
+              cpu: "{{ .Values.resources.limits.cpu }}"
+          {{- else }}
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+        volumeMounts:
+        {{- if .Values.configmap.enabled }}
+        - name: config-volume
+          mountPath: {{ .Values.configmap.mountPath }}
+        {{- end }}
+        - mountPath: /tmp
+          name: temp
+        - mountPath: /heapdump
+          name: heap-dump
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 6 }}
+      {{- end }}
+      volumes:
+      {{- if .Values.configmap.enabled }}
+      - name: config-volume
+        configMap:
+          name: {{ template "base-chart.name" . }}-config
+      {{- end }}
+      - name: heap-dump
+        emptyDir: {}
+      - name: temp
+        emptyDir: {}
+      {{- if .Values.image.pullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.image.pullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      #   volumeMounts:
+      #   - mountPath: /etc/secrets
+      #     name: secrets
+      #     readOnly: true
+      # volumes:
+      # - name: secrets
+      #   secret:
+      #     secretName: {{ template "base-chart.name" . }}
+      {{- end }}
+{{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ template "base-chart.name" . }}-serviceaccount
+{{- end }}
+{{- if .Values.securityContext.enabled }}
+      securityContext:
+        runAsUser: {{ .Values.securityContext.userId }}
+        fsGroup: {{ .Values.securityContext.groupId }}
+        runAsNonRoot: {{ .Values.securityContext.runAsNonRoot | default true }}
+{{- end }}
